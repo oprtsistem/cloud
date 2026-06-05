@@ -2,7 +2,6 @@ import time
 import numpy as np
 from max30102 import MAX30102
 
-
 # =========================
 # Red / IR -> BPM
 # =========================
@@ -13,7 +12,7 @@ def calculate_bpm(ir_values, sample_rate):
     ir = np.array(ir_values)
     ir_signal = ir - np.mean(ir)
 
-    threshold = np.mean(ir_signal) + 0.5 * np.std(ir_signal)
+    threshold = 0.5 * np.std(ir_signal) # 去均值後直接用 std
 
     peaks = []
 
@@ -80,35 +79,38 @@ try:
     red_buffer = []
     ir_buffer = []
 
-    sample_rate = 20          # time.sleep(0.05) 約等於每秒 20 筆
+    sample_rate = 25          # 100Hz / avg4 = 25
     window_seconds = 10       # 使用最近 10 秒資料
     max_len = sample_rate * window_seconds
 
     while True:
-        red, ir = m.read_fifo()
+        num_samples = m.get_data_present()
 
-        if red is not None and ir is not None:
-            if red > 10000 and ir > 10000:
-                red_buffer.append(red)
-                ir_buffer.append(ir)
+        if num_samples > 0:
+            for _ in range(num_samples):
+                red, ir = m.read_fifo()
 
-                red_buffer = red_buffer[-max_len:]
-                ir_buffer = ir_buffer[-max_len:]
+                if red > 10000 and ir > 10000:
+                    red_buffer.append(red)
+                    ir_buffer.append(ir)
 
-                bpm = calculate_bpm(ir_buffer, sample_rate)
-                spo2 = calculate_spo2(red_buffer, ir_buffer)
+                    red_buffer = red_buffer[-max_len:]
+                    ir_buffer = ir_buffer[-max_len:]
 
-                if bpm is not None and spo2 is not None:
-                    print(
-                        f"紅光: {red} | 紅外線: {ir} | "
-                        f"心率: {bpm:.1f} BPM | 血氧: {spo2:.1f}%"
-                    )
+                    bpm = calculate_bpm(ir_buffer, sample_rate)
+                    spo2 = calculate_spo2(red_buffer, ir_buffer)
+
+                    if bpm is not None and spo2 is not None:
+                        print(
+                            f"紅光: {red} | 紅外線: {ir} | "
+                            f"心率: {bpm:.1f} BPM | 血氧: {spo2:.1f}%"
+                        )
+                    else:
+                        print(f"紅光: {red} | 紅外線: {ir} | 計算中...")
                 else:
-                    print(f"紅光: {red} | 紅外線: {ir} | 計算中...")
-            else:
-                print("等待手指...", end="\r")
+                    print("等待手指...", end="\r")
 
-        time.sleep(0.05)
+        time.sleep(0.02)
 
 except Exception as e:
     print(f"錯誤: {e}")
