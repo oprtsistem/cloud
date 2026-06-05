@@ -22,6 +22,7 @@ class HealthDatabase:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS health_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,         -- 💡 新增：用來區分 'A', 'B', 'C'
                 timestamp REAL NOT NULL,
                 heart_rate REAL NOT NULL,
                 spo2 REAL NOT NULL,
@@ -31,7 +32,7 @@ class HealthDatabase:
         conn.commit()
         conn.close()
 
-    def insert_record(self, heart_rate, spo2):
+    def insert_record(self, user_id, heart_rate, spo2):
         """寫入單筆感測數據 (包含防呆邏輯)"""
         is_valid = True
         
@@ -50,21 +51,21 @@ class HealthDatabase:
         current_time = time.time()
         
         cursor.execute('''
-            INSERT INTO health_records (timestamp, heart_rate, spo2, is_valid)
-            VALUES (?, ?, ?, ?)
-        ''', (current_time, heart_rate, spo2, is_valid))
+            INSERT INTO health_records (user_id, timestamp, heart_rate, spo2, is_valid)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, current_time, heart_rate, spo2, is_valid))
         
         conn.commit()
         conn.close()
         
         # 3. 正常日誌記錄
         if is_valid:
-            logging.info(f"成功寫入: HR={heart_rate}, SpO2={spo2}")
-            print(f"[DB LOG] 寫入成功: HR={heart_rate}, SpO2={spo2}")
+            logging.info(f"成功寫入使用者 [{user_id}] 紀錄: HR={heart_rate}, SpO2={spo2}")
+            print(f"[DB LOG] 成功寫入使用者 [{user_id}] 紀錄: HR={heart_rate}, SpO2={spo2}")
         else:
             print(f"[警告] 攔截到異常數據，已標記為無效！(HR={heart_rate}, SpO2={spo2})")
 
-    def get_recent_data(self, seconds=60):
+    def get_recent_data(self, user_id, seconds=60):
         """讀取最近 N 秒的有效數據 (給前端同學呼叫的)"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
@@ -75,20 +76,36 @@ class HealthDatabase:
         cursor.execute('''
             SELECT timestamp, heart_rate, spo2 
             FROM health_records 
-            WHERE timestamp >= ? AND is_valid = 1
+            WHERE user_id = ? AND timestamp >= ? AND is_valid = 1
             ORDER BY timestamp ASC
-        ''', (time_threshold,))
+        ''', (user_id, time_threshold,))
         
         records = cursor.fetchall()
         conn.close()
         
         # 轉成前端 UI 預期的字典格式
         result = {
+            "user_id": user_id,
             "heart_rate": [r[1] for r in records],
             "spo2": [r[2] for r in records],
             "time": [r[0] for r in records] 
         }
         return result
+    
+    def clear_all_data(self):
+        """💡 核心新功能：一鍵格式化（刪除所有歷史記憶）"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # 刪除資料表內所有資料
+        cursor.execute('DELETE FROM health_records')
+        
+        # 將自動遞增的 id 計算器歸零
+        cursor.execute('DELETE FROM sqlite_sequence WHERE name="health_records"')
+        
+        conn.commit()
+        conn.close()
+        print("\n⚠️ [DB WARNING] 資料庫已成功格式化！所有使用者紀錄已清空。")
 
 # ==== 測試區塊 ====
 if __name__ == "__main__":

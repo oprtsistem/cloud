@@ -148,6 +148,64 @@
             el.style.display = 'block';
             setTimeout(() => { el.style.display = 'none'; }, 5000);
         }
+		
+		// 💡 這段 JavaScript 負責每隔 1 秒鐘，自動跟 Flask 要最新資料，並更新畫圖
+		function startLiveUpdate() {
+			// 設定定時器：每 1000 毫秒（1秒）執行一次內部程式碼
+			setInterval(function() {
+				
+				// 1. 向你修正好的 Flask API 請求最新一筆數據
+				fetch('/api/latest')
+					.then(response => {
+						if (!response.ok) {
+							throw new Error('HTTP status ' + response.status);
+						}
+						return response.json();
+					})
+					.then(data => {
+						// 如果後端傳回沒有資料，就不更新
+						if (data.status === "no_data") return;
+
+						// 2. 💡 同步更新網頁上的數字文字
+						// (請根據你們 index.html 實際的 HTML id 改名，例如心率、血氧、目前使用者)
+						if(document.getElementById("current-user-display")) {
+							document.getElementById("current-user-display").innerText = data.current_user;
+						}
+						document.getElementById("heart-rate-val").innerText = data.heart_rate + " BPM";
+						document.getElementById("spo2-val").innerText = data.spo2 + " %";
+
+						// 3. 💡 同步讓圖表畫圖（假設你們是用 Chart.js 繪圖）
+						// 這裡示範動態動態將最新時間、心率、血氧推進 Chart 裡面
+						if (typeof myChart !== 'undefined') {
+							let timeLabel = new Date(data.timestamp * 1000).toLocaleTimeString();
+							
+							// 限制圖表上限 20 筆資料，避免網頁爆炸
+							if (myChart.data.labels.length > 20) {
+								myChart.data.labels.shift();
+								myChart.data.datasets[0].data.shift(); // 心率線
+								myChart.data.datasets[1].data.shift(); // 血氧線
+							}
+							
+							myChart.data.labels.push(timeLabel);
+							myChart.data.datasets[0].data.push(data.heart_rate);
+							myChart.data.datasets[1].data.push(data.spo2);
+							
+							myChart.update(); // 💡 關鍵：呼叫 update() 才會同步畫出來！
+						}
+					})
+					.catch(error => {
+						console.error("同步失敗:", error);
+						// 網頁畫面上顯示出錯誤訊息（就是你截圖看到的紅色 Alert）
+						document.getElementById("error-msg").innerText = "無法取得最新數據：" + error.message;
+					});
+
+			}, 1000); // 💡 1000 毫秒 = 1 秒同步一次
+		}
+
+		// 網頁載入完成後自動啟動同步
+		window.onload = function() {
+			startLiveUpdate();
+		};
 
         // 每 2 秒更新最新數值
         setInterval(async () => {
