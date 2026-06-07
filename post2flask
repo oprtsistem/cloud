@@ -1,0 +1,10 @@
+import requests
+
+url = 'https://127.0.0.1'
+myobj = {'somekey': 'somevalue'}
+
+x = requests.post(url, json = myobj)
+
+#print the response text (the content of the requested file):
+
+print(x.text)

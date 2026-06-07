@@ -1,6 +1,7 @@
 import time
 import numpy as np
 from max30102 import MAX30102
+import requests
 
 # =========================
 # Red / IR -> BPM
@@ -70,7 +71,10 @@ def calculate_spo2(red_values, ir_values):
 
     return spo2
 
-
+def data2server(bpm, spo2):
+    url = 'https://127.0.0.1:5000/api/upload'
+    myobj = {'heart_rate': bpm, 'spo2': spo2}
+    x = requests.post(url, json=myobj)
 try:
     m = MAX30102(channel=4, address=0x57)
     print("MAX30102 初始化成功！")
@@ -110,7 +114,9 @@ try:
                 else:
                     print("等待手指...", end="\r")
 
+        data2server(bpm, spo2)
         time.sleep(0.02)
+        
 
 except Exception as e:
     print(f"錯誤: {e}")
