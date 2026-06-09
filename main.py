@@ -83,6 +83,9 @@ try:
     red_buffer = []
     ir_buffer = []
 
+    bpm = None
+    spo2 = None
+
     sample_rate = 25          # 100Hz / avg4 = 25
     window_seconds = 10       # 使用最近 10 秒資料
     max_len = sample_rate * window_seconds
@@ -112,6 +115,10 @@ try:
                     else:
                         print(f"紅光: {red} | 紅外線: {ir} | 計算中...")
                 else:
+                    bpm = None
+                    spo2 = None
+                    red_buffer.clear()
+                    ir_buffer.clear()
                     print("等待手指...", end="\r")
 
         data2server(bpm, spo2)
