@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,50 +13,60 @@
             padding: 20px;
             background-color: #f5f5f5;
         }
+
         h1 {
             color: #333;
             text-align: center;
         }
+
         .status-panel {
             display: flex;
             gap: 20px;
             margin-bottom: 20px;
         }
+
         .card {
             flex: 1;
             background: white;
             border-radius: 8px;
             padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             text-align: center;
         }
+
         .card h2 {
             margin: 0 0 10px;
             font-size: 1rem;
             color: #666;
         }
+
         .value {
             font-size: 2.5rem;
             font-weight: bold;
             color: #333;
         }
+
         .value.warning {
             color: red;
         }
+
         .value.normal {
             color: #333;
         }
+
         .unit {
             font-size: 0.9rem;
             color: #999;
         }
+
         .chart-container {
             background: white;
             border-radius: 8px;
             padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
+
         #error-msg {
             display: none;
             background: #ffe0e0;
@@ -67,10 +78,20 @@
         }
     </style>
 </head>
+
 <body>
     <h1>健康監測系統</h1>
 
     <div id="error-msg"></div>
+
+    <div style="background: #f0f2f5; padding: 20px; border-bottom: 3px solid #007bff;">
+        <h2 id="user-display" style="color: #dc3545; font-size: 28px;">
+            當前觀察使用者：<span id="current-user-id">{{ current_user }}</span>
+            <button onclick="checkDatabase()" style="margin-left: 20px; padding: 5px 15px;">一鍵檢查資料庫(A,B,C)</button>
+        </h2>
+
+
+    </div>
 
     <div class="status-panel">
         <div class="card">
@@ -88,6 +109,58 @@
     <div class="chart-container">
         <canvas id="trend-chart"></canvas>
     </div>
+
+
+
+    <script>
+        // ======= 新增：定時輪詢功能 =======
+        function syncCurrentUser() {
+            // 主動向 Server 詢問目前到底是誰
+            fetch('/api/control', { method: 'GET' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.current_user) {
+                        // 自動更新網頁上大大的紅字
+                        document.getElementById('current-user-id').innerText = data.current_user;
+
+                        // 自動同步下拉選單的選中狀態，避免兩邊不一致
+                        const selector = document.getElementById('user-selector');
+                        if (selector && selector.value !== data.current_user) {
+                            selector.value = data.current_user;
+                        }
+                    }
+                })
+                .catch(err => console.error("同步使用者狀態失敗:", err));
+        }
+
+        // 每 1 秒（1000 毫秒）自動執行一次 syncCurrentUser
+        setInterval(syncCurrentUser, 1000);
+
+        function changeUser(userId) {
+            fetch('/api/switch_user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    // 直觀改變 UI 顯示
+                    document.getElementById('current-user-id').innerText = data.current_user;
+                    // 這裡可以連帶觸發清除當前圖表、重新整理當前使用者的資料
+                    console.log("切換成功: " + data.current_user);
+                });
+        }
+
+        function checkDatabase() {
+            fetch('/api/db_check')
+                .then(res => res.json())
+                .then(data => {
+                    // 直接把 ABC 目前儲存的狀態用 alert 或者是 console 印出來，甚至渲染到畫面上
+                    alert("資料庫現況:\n" + JSON.stringify(data, null, 2));
+                    console.log("DB 現況:", data);
+                });
+        }
+    </script>
 
     <!-- Chart.js via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -148,64 +221,64 @@
             el.style.display = 'block';
             setTimeout(() => { el.style.display = 'none'; }, 5000);
         }
-		
-		// 💡 這段 JavaScript 負責每隔 1 秒鐘，自動跟 Flask 要最新資料，並更新畫圖
-		function startLiveUpdate() {
-			// 設定定時器：每 1000 毫秒（1秒）執行一次內部程式碼
-			setInterval(function() {
-				
-				// 1. 向你修正好的 Flask API 請求最新一筆數據
-				fetch('/api/latest')
-					.then(response => {
-						if (!response.ok) {
-							throw new Error('HTTP status ' + response.status);
-						}
-						return response.json();
-					})
-					.then(data => {
-						// 如果後端傳回沒有資料，就不更新
-						if (data.status === "no_data") return;
 
-						// 2. 💡 同步更新網頁上的數字文字
-						// (請根據你們 index.html 實際的 HTML id 改名，例如心率、血氧、目前使用者)
-						if(document.getElementById("current-user-display")) {
-							document.getElementById("current-user-display").innerText = data.current_user;
-						}
-						document.getElementById("heart-rate-val").innerText = data.heart_rate + " BPM";
-						document.getElementById("spo2-val").innerText = data.spo2 + " %";
+        // 💡 這段 JavaScript 負責每隔 1 秒鐘，自動跟 Flask 要最新資料，並更新畫圖
+        function startLiveUpdate() {
+            // 設定定時器：每 1000 毫秒（1秒）執行一次內部程式碼
+            setInterval(function () {
 
-						// 3. 💡 同步讓圖表畫圖（假設你們是用 Chart.js 繪圖）
-						// 這裡示範動態動態將最新時間、心率、血氧推進 Chart 裡面
-						if (typeof myChart !== 'undefined') {
-							let timeLabel = new Date(data.timestamp * 1000).toLocaleTimeString();
-							
-							// 限制圖表上限 20 筆資料，避免網頁爆炸
-							if (myChart.data.labels.length > 20) {
-								myChart.data.labels.shift();
-								myChart.data.datasets[0].data.shift(); // 心率線
-								myChart.data.datasets[1].data.shift(); // 血氧線
-							}
-							
-							myChart.data.labels.push(timeLabel);
-							myChart.data.datasets[0].data.push(data.heart_rate);
-							myChart.data.datasets[1].data.push(data.spo2);
-							
-							myChart.update(); // 💡 關鍵：呼叫 update() 才會同步畫出來！
-						}
-					})
-					.catch(error => {
-						console.error("同步失敗:", error);
-						// 網頁畫面上顯示出錯誤訊息（就是你截圖看到的紅色 Alert）
-						document.getElementById("error-msg").innerText = "無法取得最新數據：" + error.message;
-					});
+                // 1. 向你修正好的 Flask API 請求最新一筆數據
+                fetch('/api/latest')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('HTTP status ' + response.status);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // 如果後端傳回沒有資料，就不更新
+                        if (data.status === "no_data") return;
 
-			}, 1000); // 💡 1000 毫秒 = 1 秒同步一次
-		}
+                        // 2. 💡 同步更新網頁上的數字文字
+                        // (請根據你們 index.html 實際的 HTML id 改名，例如心率、血氧、目前使用者)
+                        if (document.getElementById("current-user-display")) {
+                            document.getElementById("current-user-display").innerText = data.current_user;
+                        }
+                        document.getElementById("heart-rate-val").innerText = data.heart_rate + " BPM";
+                        document.getElementById("spo2-val").innerText = data.spo2 + " %";
 
-		// 網頁載入完成後自動啟動同步
-		window.onload = function() {
-			startLiveUpdate();
-		};
+                        // 3. 💡 同步讓圖表畫圖（假設你們是用 Chart.js 繪圖）
+                        // 這裡示範動態動態將最新時間、心率、血氧推進 Chart 裡面
+                        if (typeof myChart !== 'undefined') {
+                            let timeLabel = new Date(data.timestamp * 1000).toLocaleTimeString();
+
+                            // 限制圖表上限 20 筆資料，避免網頁爆炸
+                            if (myChart.data.labels.length > 20) {
+                                myChart.data.labels.shift();
+                                myChart.data.datasets[0].data.shift(); // 心率線
+                                myChart.data.datasets[1].data.shift(); // 血氧線
+                            }
+
+                            myChart.data.labels.push(timeLabel);
+                            myChart.data.datasets[0].data.push(data.heart_rate);
+                            myChart.data.datasets[1].data.push(data.spo2);
+
+                            myChart.update(); // 💡 關鍵：呼叫 update() 才會同步畫出來！
+                        }
+                    })
+                    .catch(error => {
+                        console.error("同步失敗:", error);
+                        // 網頁畫面上顯示出錯誤訊息（就是你截圖看到的紅色 Alert）
+                        document.getElementById("error-msg").innerText = "無法取得最新數據：" + error.message;
+                    });
+
+            }, 1000); // 💡 1000 毫秒 = 1 秒同步一次
+        }
+
+        // 網頁載入完成後自動啟動同步
+        window.onload = function () {
+            startLiveUpdate();
+        };
 
         // 每 2 秒更新最新數值
         setInterval(async () => {
@@ -255,4 +328,5 @@
         }, 5000);
     </script>
 </body>
+
 </html>

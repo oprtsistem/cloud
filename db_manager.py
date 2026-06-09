@@ -1,3 +1,4 @@
+# -*-coding:utf-8-*-
 import sqlite3
 import time
 import logging
@@ -32,18 +33,22 @@ class HealthDatabase:
         conn.commit()
         conn.close()
 
-    def insert_record(self, user_id, heart_rate, spo2):
-        """寫入單筆感測數據 (包含防呆邏輯)"""
+    def insert_record(self, heart_rate, spo2, user_id="A"):
+        """
+        寫入單筆感測數據 (向下相容版本)
+        ui.py 與測試依然可以用 db.insert_record(hr, spo2) 呼叫，預設寫入 "A"
+        多人切換時可以用 db.insert_record(hr, spo2, user_id="B") 呼叫
+        """
         is_valid = True
         
         # 1. 防呆過濾：檢查數據是否在人類合理的生理範圍內
         if not (30 <= heart_rate <= 220):
             is_valid = False
-            logging.warning(f"異常心率攔截: HR={heart_rate}")
+            logging.warning(f"異常心率攔截: User={user_id}, HR={heart_rate}")
             
         if not (50 <= spo2 <= 100):
             is_valid = False
-            logging.warning(f"異常血氧攔截: SpO2={spo2}")
+            logging.warning(f"異常血氧攔截: User={user_id}, SpO2={spo2}")
 
         # 2. 寫入資料庫
         conn = sqlite3.connect(self.db_name)
@@ -63,16 +68,18 @@ class HealthDatabase:
             logging.info(f"成功寫入使用者 [{user_id}] 紀錄: HR={heart_rate}, SpO2={spo2}")
             print(f"[DB LOG] 成功寫入使用者 [{user_id}] 紀錄: HR={heart_rate}, SpO2={spo2}")
         else:
-            print(f"[警告] 攔截到異常數據，已標記為無效！(HR={heart_rate}, SpO2={spo2})")
+            print(f"[警告] 攔截到異常數據，已標記為無效！(User={user_id}, HR={heart_rate}, SpO2={spo2})")
 
-    def get_recent_data(self, user_id, seconds=60):
-        """讀取最近 N 秒的有效數據 (給前端同學呼叫的)"""
+    def get_user_recent_data(self, user_id="A", seconds=60):
+        """
+        💡 完美對接 web_server.py 的命名！
+        讀取特定使用者最近 N 秒的有效數據
+        """
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         
         time_threshold = time.time() - seconds
         
-        # 只撈取 is_valid 為 True (有效) 的數據
         cursor.execute('''
             SELECT timestamp, heart_rate, spo2 
             FROM health_records 
@@ -83,7 +90,6 @@ class HealthDatabase:
         records = cursor.fetchall()
         conn.close()
         
-        # 轉成前端 UI 預期的字典格式
         result = {
             "user_id": user_id,
             "heart_rate": [r[1] for r in records],
@@ -91,7 +97,14 @@ class HealthDatabase:
             "time": [r[0] for r in records] 
         }
         return result
-    
+
+    def get_recent_data(self, seconds=60):
+        """
+        💡 保留原有的無 user_id 版本方法，防止其他未預期的模組調用出錯
+        預設直接撈取全體或預設使用者 'A'
+        """
+        return self.get_user_recent_data(user_id="A", seconds=seconds)
+
     def clear_all_data(self):
         """💡 核心新功能：一鍵格式化（刪除所有歷史記憶）"""
         conn = sqlite3.connect(self.db_name)
@@ -107,21 +120,28 @@ class HealthDatabase:
         conn.close()
         print("\n⚠️ [DB WARNING] 資料庫已成功格式化！所有使用者紀錄已清空。")
 
+
 # ==== 測試區塊 ====
 if __name__ == "__main__":
     db = HealthDatabase()
     
-    # 模擬演算法同學寫入數據
+    # 模擬演算法寫入數據（正確傳入 user_id 'A' 與 'B'）
     print("模擬寫入數據中...")
-    db.insert_record(75.5, 98.2)
-    time.sleep(1)
-    db.insert_record(76.0, 99.0)
+    db.insert_record(75.5, 98.2, "A")
+    time.sleep(0.5)
+    db.insert_record(82.0, 99.5, "B")  # 寫入不同人
+    time.sleep(0.5)
+    db.insert_record(76.0, 99.0, "A")
     
-    # 寫入一筆因為手指拿開導致的無效異常數據 (is_valid=False)
-    db.insert_record(300.0, 40.0, is_valid=False) 
+    # 寫入一筆異常數據，會自動被標記為 is_valid=False
+    db.insert_record(300.0, 40.0, "A")
     
-    # 模擬前端同學讀取數據
-    print("\n前端讀取最近 60 秒的數據:")
-    recent_data = db.get_recent_data()
-    print(recent_data)
-   
+    # 模擬前端同學讀取 A 使用者數據
+    print("\n前端讀取最近 60 秒 使用者 A 的數據:")
+    recent_data_A = db.get_user_recent_data(user_id="A")
+    print(recent_data_A)
+    
+    # 模擬前端同學讀取 B 使用者數據
+    print("\n前端讀取最近 60 秒 使用者 B 的數據:")
+    recent_data_B = db.get_user_recent_data(user_id="B")
+    print(recent_data_B)

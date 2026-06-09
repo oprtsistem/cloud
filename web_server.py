@@ -47,7 +47,7 @@ def create_app(db_path: str) -> Flask:
     # ------------------------------------------------------------------ #
     @app.route("/", methods=["GET"])
     def serve_index():
-        return render_template("index.html")
+        return render_template("index.html",current_user=current_measuring_user)
 
     # ------------------------------------------------------------------ #
     # 💡 [全新微服務] 路由：/api/control — 控制狀態機 (切換使用者與格式化)
@@ -168,6 +168,38 @@ def create_app(db_path: str) -> Flask:
             return jsonify({"error": f"資料庫讀取失敗: {e}"}), 500
 
     # ------------------------------------------------------------------ #
+    # 💡 [全新一鍵檢查] 路由：/api/db_check — 立即查詢 A, B, C 資料庫現況
+    # ------------------------------------------------------------------ #
+    @app.route("/api/db_check", methods=["GET"])
+    def db_check():
+        if db is None:
+            return jsonify({"error": "資料庫連線失敗"}), 500
+
+        users = ["A", "B", "C"]
+        db_status = {}
+
+        try:
+            for u in users:
+                # 調用你現有的 get_user_recent_data，撈出最近 60 秒的數據
+                user_data = db.get_user_recent_data(user_id=u, seconds=60)
+                
+                # 整理成乾淨、好讀的格式回傳給前端
+                if user_data and user_data.get("heart_rate"):
+                    db_status[u] = {
+                        "latest_heart_rate": user_data["heart_rate"][-1],
+                        "latest_spo2": user_data["spo2"][-1],
+                        "latest_time": user_data["time"][-1],
+                        "data_count_in_60s": len(user_data["heart_rate"])
+                    }
+                else:
+                    db_status[u] = "資料庫內尚無此使用者數據"
+                    
+            return jsonify(db_status), 200
+        except Exception as e:
+            logger.error(f"db_check 一鍵檢查失敗：{e}")
+            return jsonify({"error": f"一鍵檢查失敗: {e}"}), 500
+
+    # ------------------------------------------------------------------ #
     # 路由：/api/health — 健康檢查 API
     # ------------------------------------------------------------------ #
     @app.route("/api/health", methods=["GET"])
@@ -187,6 +219,8 @@ def create_app(db_path: str) -> Flask:
             return jsonify({"status": "degraded", "db": "disconnected", "timestamp": ts}), 200
 
     return app
+
+
 
 
 if __name__ == "__main__":

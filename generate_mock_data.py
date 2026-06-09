@@ -8,7 +8,7 @@ from db_manager import HealthDatabase
 is_running = True
 current_user = "A"
 FLASK_CONTROL_API = "http://127.0.0.1:5000/api/control"
-db = HealthDatabase()
+db = HealthDatabase(db_name="health_data.db")
 
 def background_sensor_loop():
     """ 💡 這個函式會在背景獨自運行，負責『被動、持續地量測與儲存數值』 """
